@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.env
+.env.*
+provider.local.json
+private/
+output/
+cache/

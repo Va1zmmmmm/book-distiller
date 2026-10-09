@@ -1,0 +1,7 @@
+{
+  "endpoint": "https://your-provider.example/v1/chat/completions",
+  "model": "replace-with-your-model",
+  "api_key_env": "BOOK_DISTILLER_API_KEY",
+  "timeout": 120,
+  "max_output_tokens": 8192
+}
