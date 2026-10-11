@@ -24,11 +24,11 @@ class ReleaseGate(unittest.TestCase):
                     for p in (SOURCE/'book_distiller').glob('*.py'):
                         z.write(p,'book_distiller/'+p.name)
                     for n in ('METADATA','WHEEL','entry_points.txt'):
-                        z.writestr('book_distiller-0.1.0.dist-info/'+n,'synthetic metadata\n')
+                        z.writestr('book_distiller-0.2.0.dist-info/'+n,'synthetic metadata\n')
                     for n in ('LICENSE','NOTICE.md'):
                         raw=(SOURCE/n).read_bytes()
                         if changed and n=='NOTICE.md': raw=b'altered credit\n'
-                        z.writestr('book_distiller-0.1.0.dist-info/'+n,raw)
+                        z.writestr('book_distiller-0.2.0.dist-info/'+n,raw)
                 result=subprocess.run([sys.executable,'-B',str(clean/'tools/check_release.py'),'--archive',str(archive)],capture_output=True,text=True,encoding='utf-8')
                 self.assertEqual(result.returncode,1 if changed else 0,result.stdout+result.stderr)
                 if changed: self.assertIn('archive-license',result.stdout)

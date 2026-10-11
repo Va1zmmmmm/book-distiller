@@ -1,0 +1,19 @@
+{
+  "fflate": {
+    "version": "0.8.3",
+    "source": "https://github.com/101arrowz/fflate",
+    "license": "MIT"
+  },
+  "pdfjs-dist": {
+    "version": "6.4.299",
+    "source": "https://github.com/mozilla/pdf.js",
+    "license": "Apache-2.0"
+  },
+  "sha256": {
+    "fflate-LICENSE.txt": "0a1df3a083d0c010560aa342e87959c8c1070e6fd54545741f083f22d0c8b551",
+    "fflate.mjs": "b7ca4450b19559a1d50eb381adcee94b82449674be4cd17789d9beba7e6122a1",
+    "pdf.min.mjs": "57456c8e0c81e46be31174b499ef77f2b9f5ee46d04412ba627320a36755d4c2",
+    "pdf.worker.min.mjs": "9536359f1b8367850d485731ca1d5e45c159a7b7a0912325e539937aa21ceb18",
+    "pdfjs-LICENSE.txt": "0d542e0c8804e39aa7f37eb00da5a762149dc682d7829451287e11b938e94594"
+  }
+}

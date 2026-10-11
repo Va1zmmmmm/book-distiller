@@ -12,7 +12,7 @@ RULES = [
     ('user-home', re.compile(r'[A-Za-z]:[\\/]Users[\\/][^\\/\s"<>]+')),
     ('key-shape', re.compile(r'\bsk-[A-Za-z0-9_-]{20,}')),
     ('private-key', re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----')),
-    ('inline-secret', re.compile(r'''["'](?:api_key|secret|password|token)["']\s*:\s*["'][^"']+["']''', re.I)),
+    ('inline-secret', re.compile(r'''[,{]\s*["'](?:api_key|secret|password|token)["']\s*:\s*["'][^"']+["']''', re.I)),
 ]
 
 def content_findings(name, raw):
@@ -70,11 +70,11 @@ def check(root, archive=None):
                     findings.append(('archive-path',n)); continue
                 raw = z.read(entry)
                 if wheel:
-                    if len(p.parts) == 2 and p.parts[0] == 'book_distiller-0.1.0.dist-info' and p.name in {'METADATA','WHEEL','entry_points.txt','top_level.txt','RECORD','LICENSE','NOTICE.md'}:
+                    if len(p.parts) == 2 and p.parts[0] == 'book_distiller-0.2.0.dist-info' and p.name in {'METADATA','WHEEL','entry_points.txt','top_level.txt','RECORD','LICENSE','NOTICE.md'}:
                         findings.extend(content_findings(n,raw)); continue
                     relative = n
                 else:
-                    if not n.startswith('book-distiller-0.1.0-source/'):
+                    if not n.startswith('book-distiller-0.2.0-source/'):
                         findings.append(('archive-root',n)); continue
                     relative = n.split('/',1)[1]
                 packed[relative] = raw
@@ -85,7 +85,7 @@ def check(root, archive=None):
             findings += [('archive-extra',n) for n in sorted(set(packed)-expected)]
             if wheel:
                 for n in ('METADATA','WHEEL','entry_points.txt','LICENSE','NOTICE.md'):
-                    path='book_distiller-0.1.0.dist-info/'+n
+                    path='book_distiller-0.2.0.dist-info/'+n
                     if path not in seen:
                         findings.append(('wheel-metadata-missing',path))
                     elif n in ('LICENSE','NOTICE.md') and z.read(path) != source[n]:

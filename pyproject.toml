@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "book-distiller"
-version = "0.1.0"
+version = "0.2.0"
 description = "Source-checked reading cards and reading-position-scoped companion materials"
 requires-python = ">=3.11"
 readme = "README.md"
