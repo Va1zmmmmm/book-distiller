@@ -2,8 +2,9 @@ import {cleanText,makeInput,localCard,validateCard,displayCard,safeFilename,sess
 import {importBook} from './importers.mjs';
 import {zipSync,strToU8} from './vendor/fflate.mjs';
 const $=id=>document.getElementById(id);
-let input=null,candidate=null,view=null,book=null,revision=0,busy=false;
+let input=null,candidate=null,view=null,book=null,revision=0,viewEpoch=0,busy=false,aiRun=null;
 const status=s=>{$('status').textContent=s;};
+function supersedeAi(message){const run=aiRun;if(!run)return false;if(!run.cancelled){run.cancelled=message;run.controller.abort();status(message);}return true;}
 const el=(tag,text,cls)=>{const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e;};
 function save(name,data,type='application/json'){const url=URL.createObjectURL(new Blob([data],{type}));const a=el('a');a.href=url;a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(url),30000);}
 const jsonSave=(name,d)=>save(name,JSON.stringify(d,null,2)+'\n');
@@ -11,31 +12,48 @@ const currentInput=()=>makeInput($('title').value,$('author').value,$('review').
 function fill(d){const normal=makeInput(d?.book?.title||'',d?.book?.author||'',d?.review||'',(d?.highlights||[]).map(x=>typeof x==='string'?x:x.text).join('\n\n'));$('title').value=normal.book.title;$('author').value=normal.book.author;$('review').value=normal.review;$('highlights').value=normal.highlights.map(x=>x.text).join('\n\n');revision++;return normal;}
 function preview(){const p=$('preview');p.className='reading-card '+$('theme').value;p.replaceChildren();if(!view){p.append(el('p','卡片不必装下一本书。留下你愿意留下的就好。','empty-note'));return;}p.append(el('p','READING / '+view.origin,'eyebrow'),el('h2',view.title),el('p',view.author||'读后卡片','muted'));for(const s of view.sections){const section=el('section');section.append(el('h3',s.title),el('p',s.text));p.append(section);}p.append(el('p',$('accepted').checked?'本人已逐条确认 · BookDistiller':'待本人确认 · 可删掉不接受的部分','card-foot'));}
 function editor(){const root=$('edit-sections');root.replaceChildren();view.sections.forEach((s,i)=>{const row=el('div',null,'edit-section');const head=el('div',null,'section-head');const label=el('input');label.value=s.title;label.setAttribute('aria-label','段落标题');label.maxLength=100;const remove=el('button','删掉这一节');remove.type='button';remove.onclick=()=>{view.sections.splice(i,1);changed();editor();};head.append(label,remove);const area=el('textarea');area.rows=4;area.value=s.text;area.setAttribute('aria-label',s.title);label.oninput=()=>{s.title=label.value;changed();};area.oninput=()=>{s.text=area.value;changed();};row.append(head,area);root.append(row);});$('editor').hidden=false;}
-function changed(){view.origin='本人整理 / 已编辑';$('accepted').checked=false;preview();}
-function adopt(d,r,origin){input=structuredClone(d);candidate=structuredClone(r);view=displayCard(d,r,origin);$('accepted').checked=false;editor();preview();}
+function changed(){viewEpoch++;supersedeAi('卡片已编辑，正在进行的提炼已取消；原卡保留。');view.origin='本人整理 / 已编辑';$('accepted').checked=false;preview();}
+function adopt(d,r,origin){viewEpoch++;input=structuredClone(d);candidate=structuredClone(r);view=displayCard(d,r,origin);$('accepted').checked=false;editor();preview();}
 async function act(fn){try{await fn();}catch(e){status(e.message||'操作没有完成，原稿仍保留。');}}
 function tab(which){$('card-work').hidden=which!=='card';$('book-work').hidden=which!=='book';$('card-tab').setAttribute('aria-selected',which==='card');$('book-tab').setAttribute('aria-selected',which==='book');}
 $('card-tab').onclick=()=>tab('card');$('book-tab').onclick=()=>tab('book');
-for(const id of ['title','author','review','highlights'])$(id).addEventListener('input',()=>{revision++;if(view)status('材料已修改；重新排版或提炼后才会更新卡片，原卡仍保留。');});
-for(const type of ['fiction','method'])$(type).onclick=()=>act(async()=>{const d=await (await fetch('examples.json')).json();const v=d[type];adopt(fill(v.input),validateCard(v.input,v.response),'原创示例 / 预先整理');tab('card');status('示例已装入。可以改文字、删一节，再确认并导出图片。');$('card-work').scrollIntoView({behavior:'smooth',block:'start'});});
-$('local').onclick=()=>act(()=>{const d=currentInput();adopt(d,localCard(d),'本人文字 / 本地排版');status('已保留你的原话，未生成解释。看过后勾选确认，即可导出图片。');});
+for(const id of ['title','author','review','highlights'])$(id).addEventListener('input',()=>{revision++;const cancelled=supersedeAi('材料已修改，正在进行的提炼已取消；原卡保留。');if(view)status(cancelled?'材料已修改，正在进行的提炼已取消；原卡保留。':'材料已修改；重新排版或提炼后才会更新卡片，原卡仍保留。');});
+for(const type of ['fiction','method'])$(type).onclick=()=>act(async()=>{supersedeAi('示例已装入，正在进行的提炼已取消。');const d=await (await fetch('examples.json')).json();const v=d[type];adopt(fill(v.input),validateCard(v.input,v.response),'原创示例 / 预先整理');tab('card');status('示例已装入。可以改文字、删一节，再确认并导出图片。');$('card-work').scrollIntoView({behavior:'smooth',block:'start'});});
+$('local').onclick=()=>act(()=>{const d=currentInput();supersedeAi('已重新排版，正在进行的提炼已取消。');adopt(d,localCard(d),'本人文字 / 本地排版');status('已保留你的原话，未生成解释。看过后勾选确认，即可导出图片。');});
 $('theme').onchange=preview;$('accepted').onchange=preview;
 $('forget-key').onclick=()=>{$('key').value='';status('已清除本页密钥。');};
-async function promptData(){const d=currentInput();const text=await (await fetch('card-prompt.txt')).text();return text+'\n\n输入材料：\n'+JSON.stringify(d,null,2);}
+async function promptData(signal){const d=currentInput();let text;try{const res=await fetch('card-prompt.txt',signal?{signal}:undefined);if(!res.ok)throw Error('HTTP '+res.status);text=await res.text();}catch(e){if(e.name==='AbortError')throw e;throw Error('提示词读取失败'+(e.message?'：'+e.message:'')+'。');}return text+'\n\n输入材料：\n'+JSON.stringify(d,null,2);}
 $('prompt').onclick=()=>act(async()=>{save('读后卡片-提炼提示词.txt',await promptData(),'text/plain;charset=utf-8');status('已导出。你可以交给自己选择的 AI，再粘贴 JSON 候选回来核验。');});
 function parseResponse(text){return JSON.parse(text.trim().replace(/^```(?:json)?\s*/,'').replace(/\s*```$/,''));}
-$('adopt-response').onclick=()=>act(()=>{const d=currentInput();const r=validateCard(d,parseResponse($('ai-response').value));adopt(d,r,'AI 候选 / 待本人判断');status('结构和引文已核验，内容是否贴合仍请逐条判断。');});
+$('adopt-response').onclick=()=>act(()=>{const d=currentInput();const r=validateCard(d,parseResponse($('ai-response').value));supersedeAi('已采用粘贴的候选，正在进行的提炼已取消。');adopt(d,r,'AI 候选 / 待本人判断');status('结构和引文已核验，内容是否贴合仍请逐条判断。');});
 $('ai').onclick=()=>act(async()=>{
- $('ai-settings').open=true;if(busy)throw Error('上一份提炼还在进行。');const key=$('key').value.trim();if(!key){$('key').focus();throw Error('AI 提炼需要你自己的密钥。也可以下载提示词，或先用本地排版。');}
- const d=currentInput(),stamp=revision,model=$('model').value.trim();if(!/^[a-zA-Z0-9._-]{1,100}$/.test(model))throw Error('请填写有效的模型名称。');
- const prompt=await promptData();busy=true;$('ai').disabled=true;status('正在提炼。原卡保留，不会自动覆盖修改后的材料。');const abort=new AbortController(),timer=setTimeout(()=>abort.abort(),120000);
- try{let res;try{res=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},body:JSON.stringify({model,messages:[{role:'user',content:prompt}],response_format:{type:'json_object'}}),signal:abort.signal,redirect:'error',credentials:'omit'});}catch(e){throw Error(e.name==='AbortError'?'AI 请求超时，未重试，原卡保留。':'无法连接 AI 服务（网络或浏览器跨域限制）。可下载提示词后粘贴结果。');}if(!res.ok)throw Error('AI 服务返回 HTTP '+res.status+'。请检查账户、密钥与模型，未采用结果。');const answer=await res.json();if(stamp!==revision)throw Error('提炼期间材料已变化，本次结果未覆盖原卡。');const r=validateCard(d,parseResponse(answer.choices?.[0]?.message?.content||''));adopt(d,r,'AI 候选 / 待本人判断');status('引文与材料对应关系已核验；请逐条判断，删除硬套的内容。');}
- finally{clearTimeout(timer);busy=false;$('ai').disabled=false;}
+ $('ai-settings').open=true;
+ if(busy)throw Error('上一份提炼还在进行。');
+ const key=$('key').value.trim();if(!key){$('key').focus();throw Error('AI 提炼需要你自己的密钥。也可以下载提示词，或先用本地排版。');}
+ const d=currentInput(),stamp=revision,viewStamp=viewEpoch,model=$('model').value.trim();if(!/^[a-zA-Z0-9._-]{1,100}$/.test(model))throw Error('请填写有效的模型名称。');
+ busy=true;$('ai').disabled=true;const run={cancelled:'',controller:new AbortController()};aiRun=run;const abort=run.controller,timer=setTimeout(()=>{if(!run.cancelled)abort.abort();},120000);
+ try{
+  let prompt;
+  try{prompt=await promptData(abort.signal);}catch(e){if(run.cancelled)return;throw Error(e.name==='AbortError'?'提示词读取超时，未发起模型请求，原卡保留。':'提示词读取失败，未发起模型请求，原卡保留。');}
+  if(run.cancelled)return;
+  status('正在提炼。原卡保留，不会自动覆盖修改后的材料。');
+  let res;
+  try{res=await fetch('https://api.deepseek.com/chat/completions',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+key},body:JSON.stringify({model,messages:[{role:'user',content:prompt}],response_format:{type:'json_object'}}),signal:abort.signal,redirect:'error',credentials:'omit'});}
+  catch(e){if(run.cancelled)return;throw Error(e.name==='AbortError'?'AI 请求超时，未重试，原卡保留。':'无法连接 AI 服务（网络或浏览器跨域限制）。可下载提示词后粘贴结果。');}
+  if(run.cancelled)return;
+  if(!res.ok)throw Error('AI 服务返回 HTTP '+res.status+'。请检查账户、密钥与模型，未采用结果。');
+  const answer=await res.json();
+  if(run.cancelled)return;
+  if(stamp!==revision||viewStamp!==viewEpoch)throw Error('提炼期间材料或卡片已变化，本次结果未覆盖原卡。');
+  const r=validateCard(d,parseResponse(answer.choices?.[0]?.message?.content||''));
+  adopt(d,r,'AI 候选 / 待本人判断');
+  status('引文与材料对应关系已核验；请逐条判断，删除硬套的内容。');
+ }catch(e){if(run.cancelled)return;if(e&&e.name==='AbortError')throw Error('AI 请求超时，未重试，原卡保留。');throw e;}finally{clearTimeout(timer);if(aiRun===run)aiRun=null;busy=false;$('ai').disabled=false;}
 });
 $('draft').onclick=()=>act(()=>{if(!view)throw Error('请先做一张卡片。');jsonSave(safeFilename(view.title)+'-草稿.json',{format:'book-distiller-workshop',version:1,input,candidate,view,accepted:$('accepted').checked});status('草稿已下载，包含原材料与候选，不含密钥。');});
 function shareable(){if(!view||!$('accepted').checked)throw Error('请先逐条查看，并勾选愿意分享当前版本。');if(!view.sections.length)throw Error('卡片已经没有内容，请保留至少一节。');if(view.sections.reduce((n,s)=>n+s.text.length,0)>120000)throw Error('内容过长，请拆成多张卡片。');}
 $('markdown').onclick=()=>act(()=>{shareable();save(safeFilename(view.title)+'-读后卡片.md','# '+view.title+'\n\n'+view.author+'\n\n'+view.origin+' · 本人已逐条确认\n\n'+view.sections.map(s=>'## '+s.title+'\n\n'+s.text).join('\n\n')+'\n','text/markdown;charset=utf-8');});
-$('card-file').onchange=()=>act(async()=>{const f=$('card-file').files[0];if(!f)return;if(f.size>2*1024*1024)throw Error('卡片文件超过2MB。');const text=await f.text();if(!f.name.toLowerCase().endsWith('.json')){ $('review').value=cleanText(text);if(!$('title').value)$('title').value=f.name.replace(/\.[^.]+$/,'');revision++;status('已放入读后感。请确认书名，再本地排版。');return;}const d=JSON.parse(text);if(d.format==='book-distiller-workshop'){const v=d.view;if(!v||typeof v.title!=='string'||typeof v.author!=='string'||!Array.isArray(v.sections)||v.sections.length>20||v.sections.some(s=>typeof s.title!=='string'||typeof s.text!=='string'))throw Error('草稿格式有误。');input=fill(d.input);candidate=d.candidate;view=structuredClone(v);view.origin='导入草稿 / 待本人重新确认';$('accepted').checked=false;editor();preview();}else{const normal=fill(d);adopt(normal,localCard(normal),'导入材料 / 本地排版');}status('导入完成，请核对内容。');});
+$('card-file').onchange=()=>act(async()=>{const f=$('card-file').files[0];if(!f)return;if(f.size>2*1024*1024)throw Error('卡片文件超过2MB。');supersedeAi('已导入材料，正在进行的提炼已取消。');const text=await f.text();if(!f.name.toLowerCase().endsWith('.json')){ $('review').value=cleanText(text);if(!$('title').value)$('title').value=f.name.replace(/\.[^.]+$/,'');revision++;status('已放入读后感。请确认书名，再本地排版。');return;}const d=JSON.parse(text);if(d.format==='book-distiller-workshop'){const v=d.view;if(!v||typeof v.title!=='string'||typeof v.author!=='string'||!Array.isArray(v.sections)||v.sections.length>20||v.sections.some(s=>typeof s.title!=='string'||typeof s.text!=='string'))throw Error('草稿格式有误。');input=fill(d.input);candidate=d.candidate;view=structuredClone(v);viewEpoch++;view.origin='导入草稿 / 待本人重新确认';$('accepted').checked=false;editor();preview();}else{const normal=fill(d);adopt(normal,localCard(normal),'导入材料 / 本地排版');}status('导入完成，请核对内容。');});
 function wrap(ctx,text,width){const lines=[];for(const p of String(text).split('\n')){let line='';for(const ch of p){if(line&&ctx.measureText(line+ch).width>width){lines.push(line);line='';}line+=ch;}lines.push(line);}return lines;}
 export function cardPages(card,theme='paper'){
  const palettes={paper:['#f7f3e8','#25382f','#617064'],forest:['#233e32','#f7f3e8','#c6d5c8'],ink:['#222728','#f3eee5','#b4c0bb']};const [bg,fg,muted]=palettes[theme]||palettes.paper;const canvas=document.createElement('canvas');canvas.width=1080;canvas.height=1440;const ctx=canvas.getContext('2d');

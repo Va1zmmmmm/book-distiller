@@ -33,6 +33,7 @@
   "tests/test_provider.py",
   "tests/test_release.py",
   "tests/test_workflow.py",
+  "tests/web-ai-concurrency.test.mjs",
   "tests/web.test.mjs",
   "tools/check_release.py",
   "tools/release-files.json",
